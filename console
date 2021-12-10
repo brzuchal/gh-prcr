@@ -33,14 +33,14 @@ $app->add(new class() extends Command implements SignalableCommandInterface {
         assert($helper instanceof HelperInterface);
         $cmd = ['gh', 'pr', 'create'];
         $question = new Question(sprintf(self::QUESTION, 'Title', $title), $title);
-        $title = $helper->ask($input, $output, $question);
+        $title = @$helper->ask($input, $output, $question);
         if (empty($title)) return self::FAILURE;
         $cmd[] = '--title="' . addslashes($title) . '"';
         $commit = $repo->getLog($rev)->getSingleCommit();
         assert($commit instanceof Commit);
         $body = trim($commit->getMessage());
         $question = new Question(sprintf(self::QUESTION, 'Body', $body), $body);
-        $body = $helper->ask($input, $output, $question);
+        $body = @$helper->ask($input, $output, $question);
         if (empty($body)) return self::FAILURE;
         $cmd[] = '--body="' . addslashes($body) . '"';
         $gh = new Process($cmd, $cwd);
