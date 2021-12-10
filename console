@@ -1,0 +1,72 @@
+#!/usr/bin/env php
+<?php declare(strict_types=1);
+use Composer\InstalledVersions;
+use Gitonomy\Git\Commit;
+use Gitonomy\Git\Repository;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\SignalableCommandInterface;
+use Symfony\Component\Console\Helper\HelperInterface;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Question\Question;
+use Symfony\Component\Process\Process;
+require __DIR__ . '/vendor/autoload.php';
+$app = new Application(
+    basename(dirname(__DIR__)),
+    InstalledVersions::getRootPackage()['pretty_version']
+);
+$app->add(new class() extends Command implements SignalableCommandInterface {
+    const QUESTION = '<fg=green;options=bold>?</> <options=bold>%s</> <fg=gray>(%s)</> ';
+    protected static $defaultName = 'default';
+    protected function configure(): void {
+        $this->ignoreValidationErrors();
+    }
+    protected function execute(InputInterface $input, OutputInterface $output): int {
+        $cwd = getcwd();
+        $repo = new Repository($cwd);
+        $rev = $repo->getHead()->getRevision();
+        // humanize
+        $title = str_replace(['refs/heads/', '_'], ['', ' '], $rev);
+        $helper = $this->getHelper('question');
+        assert($helper instanceof HelperInterface);
+        $cmd = ['gh', 'pr', 'create'];
+        $question = new Question(sprintf(self::QUESTION, 'Title', $title), $title);
+        $title = $helper->ask($input, $output, $question);
+        if (empty($title)) return self::FAILURE;
+        $cmd[] = '--title="' . addslashes($title) . '"';
+        $commit = $repo->getLog($rev)->getSingleCommit();
+        assert($commit instanceof Commit);
+        $body = trim($commit->getMessage());
+        $question = new Question(sprintf(self::QUESTION, 'Body', $body), $body);
+        $body = $helper->ask($input, $output, $question);
+        if (empty($body)) return self::FAILURE;
+        $cmd[] = '--body="' . addslashes($body) . '"';
+        $gh = new Process($cmd, $cwd);
+        $gh->setTty(true);
+        $gh->setTimeout(null);
+        $gh->run(function (string $type, string $buffer) use ($output) {
+            $errOutput = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
+            switch ($type) {
+                case Process::ERR: $errOutput->write($buffer); break;
+                case Process::OUT: $output->write($buffer); break;
+                default: $output->write($buffer);
+            }
+        });
+        return self::SUCCESS;
+    }
+    public function getSubscribedSignals(): array {
+        // return here any of the constants defined by PCNTL extension
+        return [\SIGINT, \SIGTERM];
+    }
+    public function handleSignal(int $signal): void {
+        if (\SIGINT === $signal) exit(1);
+    }
+});
+$app->setDefaultCommand('default', true);
+try {
+    $app->run();
+} catch (Exception $e) {
+    exit(1);
+}
