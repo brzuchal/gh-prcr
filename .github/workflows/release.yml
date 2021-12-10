@@ -1,8 +1,9 @@
 name: release
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+    - '*.x'
+
 permissions:
   contents: write
 
@@ -11,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: php-actions/composer@v6
+        with:
+          dev: no
+          args: --profile --ignore-platform-reqs --prefer-dist
       - uses: cli/gh-extension-precompile@v1
         with:
           build_script_override: "script/build.sh"

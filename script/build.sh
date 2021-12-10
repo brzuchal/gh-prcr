@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
-echo "TODO implement this script."
-echo "It should build binaries in dist/<platform>-<arch>[.exe] as needed."
-exit 1
+export PHPRC=$(dirname "$0")
+composer global require clue/phar-composer
+rm $(basename $PWD)
+composer install --prefer-dist
+composer global exec phar-composer build $PWD $(basename $PWD)
